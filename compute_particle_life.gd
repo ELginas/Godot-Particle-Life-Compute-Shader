@@ -145,7 +145,8 @@ func rebuild_buffers(data: Dictionary):
 	#texture = ImageTexture.create_from_image(output_img)
 	output_tex = rdmain.texture_create(fmt, view, [output_img.get_data()])
 	textureRD.texture_rd_rid = output_tex
-
+	texture = textureRD # attach the output texture to the display node 
+	
 	# UNIFORMS
 	for i in range(6):
 		var u := RDUniform.new()
@@ -232,7 +233,7 @@ func run_simulation():
 	swap_buffer_bindings()
 	
 	# UPDATE TEXTURE ON SCREEN
-	texture = textureRD
+	#texture = textureRD # attach the output texture to the display node 
 
 # FRAME BUFFER SWAP LOGIC
 var swap_flag : int = 0
