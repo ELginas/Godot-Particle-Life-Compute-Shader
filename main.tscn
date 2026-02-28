@@ -16,8 +16,13 @@ expand_margin_bottom = 5.0
 [node name="Main" type="Node2D"]
 script = ExtResource("1_ig7tw")
 
+[node name="MMI" type="MultiMeshInstance2D" parent="."]
+unique_name_in_owner = true
+position = Vector2(42, 94)
+
 [node name="ComputeParticleLife" type="TextureRect" parent="."]
 unique_name_in_owner = true
+visible = false
 offset_left = 42.0
 offset_top = 94.0
 offset_right = 842.0
@@ -218,6 +223,7 @@ horizontal_alignment = 2
 [node name="SliderSpeed" type="HSlider" parent="SimParameters"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_force_pass_scroll_events = false
 max_value = 0.5
 step = 0.01
 value = 0.25
@@ -238,6 +244,7 @@ horizontal_alignment = 2
 [node name="SliderDampen" type="HSlider" parent="SimParameters"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_force_pass_scroll_events = false
 min_value = 0.7
 max_value = 1.0
 step = 0.01
@@ -259,6 +266,7 @@ horizontal_alignment = 2
 [node name="SliderSenseRadius" type="HSlider" parent="SimParameters"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_force_pass_scroll_events = false
 min_value = 10.0
 max_value = 500.0
 step = 10.0
@@ -280,6 +288,7 @@ horizontal_alignment = 2
 [node name="SliderForceSoftenMultiplier" type="HSlider" parent="SimParameters"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_force_pass_scroll_events = false
 min_value = 0.005
 max_value = 1.0
 step = 0.005
@@ -318,6 +327,7 @@ horizontal_alignment = 2
 [node name="SliderMaxVelocityMultiplier" type="HSlider" parent="SimParameters"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_force_pass_scroll_events = false
 min_value = 0.05
 max_value = 5.0
 step = 0.01
@@ -340,50 +350,10 @@ horizontal_alignment = 2
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="LabelDrawSize" type="Label" parent="SimParameters"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "DRAW SIZE"
-horizontal_alignment = 2
-
-[node name="LabelDrawSizeValue" type="Label" parent="SimParameters"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-text = "0"
-horizontal_alignment = 2
-
-[node name="SliderDrawSize" type="HSlider" parent="SimParameters"]
-unique_name_in_owner = true
-layout_mode = 2
-min_value = 1.0
-max_value = 4.0
-value = 2.0
-
-[node name="LabelCollideModifier" type="Label" parent="SimParameters"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "COLLIDE MOD"
-horizontal_alignment = 2
-
-[node name="LabelCollideModifierValue" type="Label" parent="SimParameters"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-text = "0"
-horizontal_alignment = 2
-
-[node name="SliderCollideModifier" type="HSlider" parent="SimParameters"]
-unique_name_in_owner = true
-layout_mode = 2
-max_value = 2.0
-step = 0.5
-value = 0.5
-
 [node name="LabelCollideRadius" type="Label" parent="SimParameters"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "COLLIDE RADIUS"
+text = "COLLIDE SIZE"
 horizontal_alignment = 2
 
 [node name="LabelCollideRadiusValue" type="Label" parent="SimParameters"]
@@ -393,9 +363,13 @@ size_flags_horizontal = 3
 text = "0"
 horizontal_alignment = 2
 
-[node name="ControlSpacer5" type="Control" parent="SimParameters"]
+[node name="SliderCollideRadius" type="HSlider" parent="SimParameters"]
+unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 3
+mouse_force_pass_scroll_events = false
+max_value = 20.0
+step = 0.5
+value = 3.5
 
 [node name="LabelCollideStr" type="Label" parent="SimParameters"]
 layout_mode = 2
@@ -413,6 +387,7 @@ horizontal_alignment = 2
 [node name="SliderCollideStr" type="HSlider" parent="SimParameters"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_force_pass_scroll_events = false
 max_value = 30.0
 step = 0.5
 value = 2.0
@@ -433,6 +408,7 @@ horizontal_alignment = 2
 [node name="SliderBorderStyle" type="HSlider" parent="SimParameters"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_force_pass_scroll_events = false
 max_value = 4.0
 
 [node name="LabelBorderScale" type="Label" parent="SimParameters"]
@@ -451,6 +427,7 @@ horizontal_alignment = 2
 [node name="SliderBorderScale" type="HSlider" parent="SimParameters"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_force_pass_scroll_events = false
 min_value = 0.5
 max_value = 8.0
 step = 0.05
@@ -472,6 +449,7 @@ horizontal_alignment = 2
 [node name="SliderCenterPull" type="HSlider" parent="SimParameters"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_force_pass_scroll_events = false
 max_value = 0.5
 step = 0.01
 value = 0.01
@@ -492,6 +470,7 @@ horizontal_alignment = 2
 [node name="SliderMaxForce" type="HSlider" parent="SimParameters"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_force_pass_scroll_events = false
 max_value = 10000.0
 step = 0.1
 value = 5.0

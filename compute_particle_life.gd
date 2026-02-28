@@ -1,14 +1,12 @@
 extends TextureRect
 
 # CONFIG
-var shader_local_size := 512
-var empty_img : Image
-@onready var image_size : int = %ComputeParticleLife.size.x:
-	set(v):
-		empty_img = Image.create(v, v, false, Image.FORMAT_RGBAF)
-		empty_img.fill(Color(0.1, 0.1, 0.1, 1.0))
-		image_size = v
-var point_count : int = 1024*15
+var compute_texture_size :int= 256 # Holds up to 256*256 pixel particles
+var viewport_size :int= 800 
+var shader_local_size_x := 16
+var shader_local_size_y := 16
+@onready var image_size = compute_texture_size
+var point_count : int = 1024*10
 var species_count : int = 8
 
 # STARTUP PARAMS
@@ -19,19 +17,15 @@ var start_species_count : int = species_count # only used when restarting new fi
 var starting_method : int = 2 # which method to use when restarting new field?
 
 # SPEED/TIME
-var dt : float = .25
+var dt : float = .1 #.25
 var paused_dt : float = dt # only used for pause/resume feature
 
 # PARTICLE SIZE
-var draw_radius : float = 3.0
-var interaction_radius : float = 50.0
+var interaction_radius : float = 150.0
 
 # COLLISION FORCE
-var collision_modifier : float = 0.5
-var collision_radius : float =  draw_radius + collision_modifier:
-	get():
-		return draw_radius + collision_modifier
-var collision_strength : float = 10.0 # 20.0 # 30.0 # 15.0 # 4.0 #2.0 # 5.0 # 10.0 # 0.0
+var collision_radius : float = 15.0 # 3.5
+var collision_strength : float = 1.0 # 10.0 # 20.0 # 30.0 # 15.0 # 4.0 #2.0 # 5.0 # 10.0 # 0.0
 
 # BORDER STYLE (optional)
 var border_style : float = 0.0 # 0 no boundary, 1 bounded rectangle, 2 bounded circle, 3 bouncy rectangle, 4 bouncy circle
@@ -63,7 +57,6 @@ const MAX_ZOOM := 5.0
 var interaction_matrix : PackedFloat32Array = []
 
 # RENDERER SETUP
-#var rd := RenderingServer.create_local_rendering_device()
 var rdmain := RenderingServer.get_rendering_device()
 var textureRD: Texture2DRD
 var shader : RID
@@ -74,14 +67,19 @@ var fmt := RDTextureFormat.new()
 var view := RDTextureView.new()
 var buffers : Array[RID] = []
 var uniforms : Array[RDUniform] = []
-var output_tex_uniform : RDUniform
+var output_tex_uniform : RDUniform # TODO: CONFIRM IF NEEDED
+var input_particles : RID
+var output_particles : RID
+var multimesh := MultiMesh.new()
+var quadmesh := QuadMesh.new()
+var render_material := ShaderMaterial.new()
 
 func _ready():
 	randomize()
 	image_size = %ComputeParticleLife.size.x
 	
-	fmt.width = image_size
-	fmt.height = image_size
+	fmt.width = compute_texture_size
+	fmt.height = compute_texture_size
 	fmt.format = RenderingDevice.DATA_FORMAT_R32G32B32A32_SFLOAT
 	fmt.usage_bits = RenderingDevice.TEXTURE_USAGE_CAN_UPDATE_BIT \
 					| RenderingDevice.TEXTURE_USAGE_STORAGE_BIT \
@@ -134,75 +132,89 @@ func restart_simulation():
 
 func rebuild_buffers(data: Dictionary):
 	buffers.clear()
-	uniforms.clear()
 
-	var pos_bytes :PackedByteArray= data["pos"].to_byte_array()
-	var vel_bytes :PackedByteArray= data["vel"].to_byte_array()
+	var img_particles := Image.create(
+		compute_texture_size,
+		compute_texture_size,
+		false,
+		Image.FORMAT_RGBAF
+	)
+
+	for i in point_count:
+		var x :int= i % compute_texture_size
+		@warning_ignore("integer_division")
+		var y :int= i / compute_texture_size
+		img_particles.set_pixel(
+			x, y,
+			Color(data["pos"][i].x, data["pos"][i].y, data["vel"][i].x, data["vel"][i].y)
+		)
+	var data_particles := img_particles.get_data()
+	input_particles = rdmain.texture_create(fmt, view, [data_particles])
+	output_particles = rdmain.texture_create(fmt, view, [data_particles])
+
+	# IN BUFFERS 
 	var species_bytes :PackedByteArray= data["species"].to_byte_array()
 	var interaction_bytes :PackedByteArray= data["interaction_matrix"].to_byte_array()
-
-	# IN BUFFERS
-	buffers.append(rdmain.storage_buffer_create(pos_bytes.size(), pos_bytes))      # 0
-	buffers.append(rdmain.storage_buffer_create(vel_bytes.size(), vel_bytes))      # 1
 	buffers.append(rdmain.storage_buffer_create(species_bytes.size(), species_bytes))  # 2
-
-	# OUT BUFFERS (copy of input)
-	for b in [pos_bytes, vel_bytes]:
-		buffers.append(rdmain.storage_buffer_create(b.size(), b))  # 3, 4
-
-	# Interaction Matrix
 	buffers.append(rdmain.storage_buffer_create(interaction_bytes.size(), interaction_bytes))  # 5
 
 	# Output texture
-	var output_img := Image.create(image_size, image_size, false, Image.FORMAT_RGBAF)
-	#texture = ImageTexture.create_from_image(output_img)
-	output_tex = rdmain.texture_create(fmt, view, [output_img.get_data()])
-	textureRD.texture_rd_rid = output_tex
-	texture = textureRD # attach the output texture to the display node 
-	
-	# UNIFORMS
-	for i in range(6):
-		var u := RDUniform.new()
-		u.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-		u.binding = i
-		u.add_id(buffers[i])
-		uniforms.append(u)
+	textureRD.texture_rd_rid = output_particles
 
-	# IMAGE TEXTURE OUTPUT
-	output_tex_uniform = RDUniform.new()
-	output_tex_uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
-	output_tex_uniform.binding = 6
-	output_tex_uniform.add_id(output_tex)
-	uniforms.append(output_tex_uniform)
+	# multimesh/instance/mesh/material
+	#var mask :Texture2D= load("res://triangle.png")
+	var mask :GradientTexture2D= load("res://my_circle.tres")
+	render_material.shader = load("res://particle_draw.gdshader")
+	render_material.set_shader_parameter("alpha_tex", mask)
+	render_material.set_shader_parameter("particle_buffer", textureRD)
+	var heatmap_colors :GradientTexture1D= load("res://my_gradient_heatmap.tres")
+	render_material.set_shader_parameter("gradient_texture", heatmap_colors)
+	render_material.set_shader_parameter("species_count", species_count)
+	render_material.set_shader_parameter("camera_center", camera_center)
+	render_material.set_shader_parameter("zoom", zoom)
+	render_material.set_shader_parameter("compute_texture_size", compute_texture_size)
+	render_material.set_shader_parameter("viewport_size", Vector2(viewport_size, viewport_size))
+	%MMI.material = render_material # 2D
+
+	quadmesh.size = Vector2.ONE
+	multimesh.instance_count = 0 # can only set other values when instance_count==0
+	multimesh.mesh = quadmesh
+	multimesh.transform_format = MultiMesh.TRANSFORM_2D
+	multimesh.use_colors = false
+	multimesh.use_custom_data = true
+	multimesh.instance_count = point_count # actual point count
+	for i in range(point_count):
+		multimesh.set_instance_transform_2d(i, Transform2D())
+		multimesh.set_instance_custom_data(i, Color(data["species"][i],0,0,0))
+
+	%MMI.multimesh = multimesh
 
 	# SHADER + PIPELINE
 	var shader_file := load("res://compute_particle_life.glsl") as RDShaderFile
 	shader = rdmain.shader_create_from_spirv(shader_file.get_spirv())
 	pipeline = rdmain.compute_pipeline_create(shader)
-	uniform_set = rdmain.uniform_set_create(uniforms, shader, 0)
 
-func compute_stage(run_mode:int):
-	# default to 1 dimension for particles
-	var global_size_x : int = int(float(point_count) / shader_local_size) + 1
-	var global_size_y : int = 1
+func compute_stage(_run_mode:int,input_set,output_set):
+	var global_size_x : int
+	var global_size_y : int
 	
-	## but use 2 dimensions for image size during CLEAR stage 
-	#if (run_mode == 1) :
-		#global_size_x = image_size
-		#global_size_y = image_size
+	# Dispatch group size
+	global_size_x = int(ceil(float(compute_texture_size) / float(shader_local_size_x)))
+	global_size_y = int(ceil(float(compute_texture_size) / float(shader_local_size_y)))
 	
 	var compute_list := rdmain.compute_list_begin()
 	rdmain.compute_list_bind_compute_pipeline(compute_list, pipeline)
-	rdmain.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
+	rdmain.compute_list_bind_uniform_set(compute_list, input_set, 0)
+	rdmain.compute_list_bind_uniform_set(compute_list, output_set, 1)
 
 	# PUSH CONSTANT PARAMETERS
 	var params := PackedFloat32Array([
 		dt,
+		compute_texture_size,
 		damping,
 		point_count,
 		species_count,
 		interaction_radius,
-		draw_radius,
 		collision_radius,
 		collision_strength,
 		border_style,
@@ -212,10 +224,6 @@ func compute_stage(run_mode:int):
 		force_softening,
 		max_force,
 		max_velocity,
-		camera_center.x,
-		camera_center.y,
-		zoom,
-		run_mode,
 		0.0 # padding to 4
 	])
 	var params_bytes := PackedByteArray()
@@ -224,96 +232,74 @@ func compute_stage(run_mode:int):
 	rdmain.compute_list_set_push_constant(compute_list, params_bytes, params_bytes.size())
 	rdmain.compute_list_dispatch(compute_list, global_size_x, global_size_y, 1) 
 	rdmain.compute_list_end()
-	#rdmain.submit()
-	#rdmain.sync()
 
-func _process(_delta):
+func _physics_process(_delta):
+	# using _physics_process - Just to have a stable fps for now
 	RenderingServer.call_on_render_thread(run_simulation)
 
 func run_simulation():
-	### RUN ALL COMPUTE STAGES
-	#for run_mode in [0, 1, 2]:  # 0 = simulate, 1 = clear, 2 = draw
-		#compute_stage(run_mode)
-		
-	compute_stage(0)
+	# Flip buffers via uniformsets
+	var frame_flip = flip_buffers()
+	var input_set  = frame_flip[0]
+	var output_set = frame_flip[1]
 	
-	#compute_stage(1)
-	rdmain.texture_update(output_tex, 0, empty_img.get_data())
+	# RUN SIM STEP
+	compute_stage(0,input_set,output_set)
 	
-	compute_stage(2)
-	
-	### RESOLVE RESULTS — swap the output to be the input for next frame
-	swap_buffer_bindings()
-	
-	# UPDATE TEXTURE ON SCREEN
-	#texture = textureRD # attach the output texture to the display node 
+	# UPDATE MATERIAL BUFFERS
+	render_material.set_shader_parameter("particle_buffer", textureRD)
+	render_material.set_shader_parameter("camera_center", camera_center)
+	render_material.set_shader_parameter("zoom", zoom)
 
-# FRAME BUFFER SWAP LOGIC
-var swap_flag : int = 0
-func swap_buffer_bindings():
-	if (dt == 0):
-		return
-	
-	swap_flag = 1 - swap_flag  # toggle between 0 and 1
+	rdmain.free_rid(input_set)
+	rdmain.free_rid(output_set)
 
-	var pos_in_index = 0
-	var vel_in_index = 0
-	var pos_out_index = 0
-	var vel_out_index = 0
-	if swap_flag == 0:
-		# Use first set as input, second set as output
-		pos_in_index = 0
-		vel_in_index = 1
-		pos_out_index = 3
-		vel_out_index = 4
+var ping : bool = false
+func flip_buffers():
+	# Flip buffers
+	ping = !ping
+	var read_main  : RID
+	var read_sec   : RID
+	var write_main : RID
+	var write_sec  : RID
+	if ping:
+		read_main  = output_particles
+		write_main = input_particles
 	else:
-		# Use second set as input, first set as output
-		pos_in_index = 3
-		vel_in_index = 4
-		pos_out_index = 0
-		vel_out_index = 1
-	
-	# rebuild uniforms for bindings 0 and 1
-	uniforms[0] = RDUniform.new()
-	uniforms[0].uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-	uniforms[0].binding = 0
-	uniforms[0].add_id(buffers[pos_in_index])
-	uniforms[1] = RDUniform.new()
-	uniforms[1].uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-	uniforms[1].binding = 1
-	uniforms[1].add_id(buffers[vel_in_index])
-	
-	uniforms[3] = RDUniform.new()
-	uniforms[3].uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-	uniforms[3].binding = 3
-	uniforms[3].add_id(buffers[pos_out_index])
-	uniforms[4] = RDUniform.new()
-	uniforms[4].uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-	uniforms[4].binding = 4
-	uniforms[4].add_id(buffers[vel_out_index])
-	
-	# rebuild uniform set
-	rdmain.free_rid(uniform_set)
-	uniform_set = rdmain.uniform_set_create(uniforms, shader, 0)
+		read_main  = input_particles
+		write_main = output_particles
 
-# HANDLE MOUSE INPUTS
-var dragging := false
-var last_mouse_pos := Vector2()
-func _gui_input(event):
-	if event is InputEventMouseButton:
-		# Handle zoom
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			zoom = clamp(zoom * 1.05, MIN_ZOOM, MAX_ZOOM)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			zoom = clamp(zoom / 1.05, MIN_ZOOM, MAX_ZOOM)
+	# use correct output image
+	if textureRD:
+		textureRD.texture_rd_rid = write_main
+	
+	# Create uniform sets
+	var input_set  := _create_uniform_set(read_main,  read_sec,  0)
+	var output_set := _create_uniform_set(write_main, write_sec, 1)
+	
+	return [input_set,output_set]
 
-		# Start/stop panning with right mouse button
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			dragging = event.pressed
-			last_mouse_pos = event.position
+func _create_uniform_set(texture_rd: RID, texture_rd2: RID, _uniform_set: int) -> RID:
+	var uniform := RDUniform.new()
+	uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+	uniform.binding = 0
+	uniform.add_id(texture_rd)
+	
+	var uniform2 := RDUniform.new()
+	uniform2.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+	uniform2.binding = 0
+	uniform2.add_id(texture_rd2)
+	
+	var uniform3 := RDUniform.new()
+	uniform3.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uniform3.binding = 1
+	uniform3.add_id(buffers[0]) #  in_species_buffer
 
-	elif event is InputEventMouseMotion and dragging:
-		# Convert drag delta to world space based on zoom
-		var delta :Vector2= (event.position - last_mouse_pos) / zoom
-		last_mouse_pos = event.position
-		camera_center -= delta
+	var uniform4 := RDUniform.new()
+	uniform4.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uniform4.binding = 2
+	uniform4.add_id(buffers[1]) # interaction_matrix
+	
+	var new_set = [uniform, uniform2, uniform3, uniform4]
+	
+	return rdmain.uniform_set_create(new_set, shader, _uniform_set)

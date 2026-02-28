@@ -1,34 +1,29 @@
 #[compute]
 #version 450
-layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 struct MyVec2 { vec2 v; };
 
-// Input
-layout(set = 0, binding = 0, std430) buffer InPosBuffer     { MyVec2 data[]; } in_pos_buffer;
-layout(set = 0, binding = 1, std430) buffer InVelBuffer     { MyVec2 data[]; } in_vel_buffer;
-layout(set = 0, binding = 2, std430) buffer InSpeciesBuffer { int data[]; }   in_species_buffer;
+// Image buffers with encoded particle data
+layout(rgba32f, set = 0, binding = 0) uniform restrict image2D input_particles; // R=pos.x, G=pos.y, B=vel.x, A=vel.y
+layout(rgba32f, set = 1, binding = 0) uniform restrict image2D output_particles;
 
-// Output
-layout(set = 0, binding = 3, std430) buffer OutPosBuffer    { MyVec2 data[]; } out_pos_buffer;
-layout(set = 0, binding = 4, std430) buffer OutVelBuffer    { MyVec2 data[]; } out_vel_buffer;
+// Input
+layout(set = 0, binding = 1, std430) buffer InSpeciesBuffer { int data[]; }   in_species_buffer;
 
 // Interaction matrix (species_count x species_count)
-layout(set = 0, binding = 5, std430) readonly buffer MatrixBuffer {
+layout(set = 0, binding = 2, std430) readonly buffer MatrixBuffer {
     float data[];
 } interaction_matrix;
-
-// Render target
-layout(set = 0, binding = 6, rgba32f) uniform image2D OUTPUT_TEXTURE;
 
 // Parameters
 layout(push_constant, std430) uniform Params {
     float dt;
+	float compute_texture_size;
     float damping;
     float point_count;
     float species_count;
     float interaction_radius;
-    float draw_radius;
 	float collision_radius;
 	float collision_strength;
 	float border_style;
@@ -38,71 +33,7 @@ layout(push_constant, std430) uniform Params {
 	float force_softening;
 	float max_force;
 	float max_velocity;
-	float camera_center_x;
-	float camera_center_y;
-	float zoom;
-    float run_mode;  // 0 = sim, 1 = draw
 } params;
-
-// Color generator per species // TODO: consider passing in colors as push constant parameter
-vec3 species_color_custom(int species) {
-    if (species == 0) return vec3(1.0, 0.0, 0.0); // Red
-    if (species == 1) return vec3(0.0, 1.0, 0.0); // Green
-    if (species == 2) return vec3(0.0, 0.0, 1.0); // Blue
-    if (species == 3) return vec3(1.0, 1.0, 0.0); // Yellow
-    if (species == 4) return vec3(1.0, 0.0, 1.0); // Purple
-    if (species == 5) return vec3(0.0, 1.0, 1.0); // Lt Blue
-    if (species == 6) return vec3(0.5, 0.5, 0.5); // Gray
-	
-    if (species == 7) return vec3(0.06, 0.64, 0.43); // Dr Green
-    if (species == 8) return vec3(1.0, 0.65, 0.0); // Orange
-    
-	// last species
-	return vec3(1.0); // White
-}
-vec3 heatmap_color(float t) {
-    // Clamp between 0 and 1
-    t = clamp(t, 0.0, 1.0);
-
-    // Map t to blue to cyan to green to yellow to red
-    if (t < 0.25) {
-        // Blue to Cyan
-        float k = t / 0.25;
-        return mix(vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 1.0), k);
-    } else if (t < 0.5) {
-        // Cyan to Green
-        float k = (t - 0.25) / 0.25;
-        return mix(vec3(0.0, 1.0, 1.0), vec3(0.0, 1.0, 0.0), k);
-    } else if (t < 0.75) {
-        // Green to Yellow
-        float k = (t - 0.5) / 0.25;
-        return mix(vec3(0.0, 1.0, 0.0), vec3(1.0, 1.0, 0.0), k);
-    } else {
-        // Yellow to Red
-        float k = (t - 0.75) / 0.25;
-        return mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), k);
-    }
-}
-vec3 species_color_dynamic(int species) {
-    // Map species index to 0..1 range
-    float t = float(species) / max(float(params.species_count - 1), 1.0);
-    return heatmap_color(t);
-}
-
-
-// draw or erase circles
-void draw_circle(vec2 center, float radius, vec4 color) {
-    ivec2 min_pix = ivec2(floor(center - radius));
-    ivec2 max_pix = ivec2(ceil(center + radius));
-    for (int x = min_pix.x; x <= max_pix.x; x++) {
-        for (int y = min_pix.y; y <= max_pix.y; y++) {
-            vec2 p = vec2(x, y);
-            if (length(p - center) <= radius) {
-                imageStore(OUTPUT_TEXTURE, ivec2(x, y), color);
-            }
-        }
-    }
-}
 
 // Apply a softened and capped force
 float apply_force(float f, float dist, float softening, float max_force) {
@@ -121,7 +52,8 @@ vec2 random_dir(uint a, uint b) {
 
 // Applies border constraints based on params.border_style and border_scale
 void apply_border(inout vec2 pos, inout vec2 vel) {
-    ivec2 size = imageSize(OUTPUT_TEXTURE);
+    ivec2 size = ivec2(params.image_size);
+	
     vec2 half_bounds = vec2(size) * 0.5 * params.border_scale;
     float radius = float(min(size.x, size.y)) * 0.5 - 1.0;
 
@@ -172,11 +104,16 @@ void apply_border(inout vec2 pos, inout vec2 vel) {
 }
 
 void run_sim() {
-    uint id = gl_GlobalInvocationID.x;
-    if (id >= uint(params.point_count)) return;
-
-    vec2 pos = in_pos_buffer.data[id].v;
-    vec2 vel = in_vel_buffer.data[id].v;
+	ivec2 uv = ivec2(gl_GlobalInvocationID.xy);
+	int id = int(uv.y * params.compute_texture_size + uv.x);
+	
+	if (id >= params.point_count || uv.x >= params.compute_texture_size || uv.y >= params.compute_texture_size) {
+		return;
+	}	
+	vec4 pixel = imageLoad(input_particles, uv);
+	
+	vec2 pos = pixel.rg;
+	vec2 vel = pixel.ba;
     int species = in_species_buffer.data[id];
 
 	// Calculate particle forces
@@ -184,13 +121,21 @@ void run_sim() {
     for (uint i = 0; i < uint(params.point_count); ++i) {
         if (i == id) continue;
 
-        vec2 other_pos = in_pos_buffer.data[i].v;
+		// Map particle index to 2D texel coordinates
+		ivec2 other_uv = ivec2(i % int(params.compute_texture_size), i / params.compute_texture_size);
+		vec4 other_pixel = imageLoad(input_particles, other_uv);
+		
+		// Get particle position
+		vec2 other_pos = other_pixel.rg;
+		vec2 other_vel = other_pixel.ba;
         int other_species = in_species_buffer.data[i];
-        vec2 r = other_pos - pos;
-		float dist = length(r);
+		
+		// Distance between
+		vec2 diff = other_pos - pos;
+		float dist = length(diff);
 		
 		if (dist > 0.0001) {
-			vec2 dir = normalize(r);
+			vec2 dir = normalize(diff);
 			
 			// Particle attraction/repulsion (with softening + clamp)
             if (dist < params.interaction_radius) {
@@ -199,7 +144,7 @@ void run_sim() {
             }
 
             // Particle collision (with softening + clamp)
-            float min_dist = params.collision_radius * 2.0;
+            float min_dist = params.collision_radius;
             if (dist < min_dist) {
                 float penetration = min_dist - dist;
                 float f = penetration * params.collision_strength;
@@ -209,22 +154,22 @@ void run_sim() {
 			// in the exact same spot, so push apart in a random direction
 			vec2 dir = random_dir(id, i);
 			float f = params.collision_strength * params.collision_radius; // tiny force
-			//force -= dir * f;
 			force -= dir * apply_force(f, 0.001, params.force_softening, params.max_force);
 		}
     }
 	
 	// Attraction to center
 	if (params.center_attraction>0.0001) {
-		vec2 center = vec2(0.0); //vec2(params.image_size/2.0,params.image_size/2.0);
+		vec2 center = vec2(0.0);
 		vec2 r_center = center - pos;
 		float dist_center = length(r_center);
 		vec2 dir_center = normalize(r_center);
-		force += params.center_attraction * dir_center; // / dist_center;
+		force += params.center_attraction * dir_center;
 	}
 
     // Integrate velocity
     vel += force * params.dt;
+    //vel += force;
     vel *= params.damping;
 	
     // Velocity clamp
@@ -239,46 +184,10 @@ void run_sim() {
 	// Boundary collision
 	apply_border(pos, vel);
 
-	// Output
-    out_pos_buffer.data[id].v = pos;
-    out_vel_buffer.data[id].v = vel;
+    // Write back
+	imageStore(output_particles, uv, vec4(pos, vel));
 }
-
-void draw_texture() {
-    uint id = gl_GlobalInvocationID.x;
-    if (id >= uint(params.point_count)) return;
-
-	vec2 curr_pos = in_pos_buffer.data[id].v;   // Current particles pos
-	vec2 image_size_vec = vec2(params.image_size,params.image_size);
-    int species = in_species_buffer.data[id];
-	
-	// Determine color
-    vec3 color = species_color_dynamic(species);
-    //vec3 color = species_color_custom(species);
-	
-    // Convert particle position into screen coordinates with zoom/pan
-    vec2 rel = in_pos_buffer.data[id].v - vec2(params.camera_center_x,params.camera_center_y);
-    rel *= params.zoom;
-    vec2 screen_pos = rel + image_size_vec * 0.5;
-
-    // Discard if outside image
-    if (screen_pos.x < -params.draw_radius || screen_pos.x >= image_size_vec.x + params.draw_radius ||
-        screen_pos.y < -params.draw_radius || screen_pos.y >= image_size_vec.y + params.draw_radius) {
-        return;
-    }
-
-    // Draw a circle for the particle
-	float draw_size = params.draw_radius * params.zoom;
-    draw_circle(screen_pos, draw_size, vec4(color, 1.0));
-}
-
 
 void main() {
-    if (params.run_mode == 0 && params.dt > 0.0) {
-        run_sim();
-    } else if (params.run_mode == 2) {
-        draw_texture();
-    }
-	
-	
+    run_sim();
 }

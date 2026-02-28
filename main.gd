@@ -6,8 +6,7 @@ var slider_bindings = {
 	"%SliderSenseRadius": "interaction_radius",
 	"%SliderForceSoftenMultiplier": "force_softening_mul",
 	"%SliderMaxVelocityMultiplier": "max_velocity_mul",
-	"%SliderDrawSize": "draw_radius",
-	"%SliderCollideModifier": "collision_modifier",
+	"%SliderCollideRadius": "collision_radius",
 	"%SliderCollideStr": "collision_strength",
 	"%SliderCenterPull": "center_attraction",
 	"%SliderMaxForce": "max_force",
@@ -40,9 +39,7 @@ func _process(_delta):
 	%LabelForceSoftenValue.text = str(snapped(%ComputeParticleLife.force_softening,.01))
 	%LabelMaxVelocityMultiplierValue.text = str(snapped(%ComputeParticleLife.max_velocity_mul,.01))
 	%LabelMaxVelocityValue.text = str(snapped(%ComputeParticleLife.max_velocity,.01))
-	%LabelDrawSizeValue.text = str(snapped(%ComputeParticleLife.draw_radius,.01))
-	%LabelCollideModifierValue.text = str(snapped(%ComputeParticleLife.collision_modifier,.1))
-	%LabelCollideRadiusValue.text = str(snapped(%ComputeParticleLife.collision_radius,.01))
+	%LabelCollideRadiusValue.text = str(snapped(%ComputeParticleLife.collision_radius,.1))
 	%LabelCollideStrValue.text = str(snapped(%ComputeParticleLife.collision_strength,.01))
 	%LabelBorderStyleValue.text = str(snapped(%ComputeParticleLife.border_style,.01))
 	%LabelBorderScaleValue.text = str(snapped(%ComputeParticleLife.border_size_scale,.01))
@@ -105,3 +102,25 @@ func _on_option_start_species_count_item_selected(index: int) -> void:
 	%CheckBoxLockMatrix.disabled=false
 	if (%ComputeParticleLife.start_species_count != %ComputeParticleLife.species_count):
 			%CheckBoxLockMatrix.disabled=true
+
+# HANDLE MOUSE INPUTS
+var dragging := false
+var last_mouse_pos := Vector2()
+func _unhandled_input(event):
+	if event is InputEventMouseButton:
+		# Handle zoom
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			%ComputeParticleLife.zoom = clamp(%ComputeParticleLife.zoom * 1.05, %ComputeParticleLife.MIN_ZOOM, %ComputeParticleLife.MAX_ZOOM)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			%ComputeParticleLife.zoom = clamp(%ComputeParticleLife.zoom / 1.05, %ComputeParticleLife.MIN_ZOOM, %ComputeParticleLife.MAX_ZOOM)
+
+		# Start/stop panning with right mouse button
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			dragging = event.pressed
+			last_mouse_pos = event.position
+
+	elif event is InputEventMouseMotion and dragging:
+		# Convert drag delta to world space based on zoom
+		var delta :Vector2= (event.position - last_mouse_pos) / %ComputeParticleLife.zoom
+		last_mouse_pos = event.position
+		%ComputeParticleLife.camera_center -= delta
