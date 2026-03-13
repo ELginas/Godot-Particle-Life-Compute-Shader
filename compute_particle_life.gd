@@ -6,6 +6,7 @@ var viewport_size :int= 800
 var shader_local_size_x := 16
 var shader_local_size_y := 16
 @onready var image_size = compute_texture_size
+var world_size_mult : int = 20
 var point_count : int = 1024*10
 var species_count : int = 8
 
@@ -52,6 +53,11 @@ var camera_center : Vector2 = Vector2.ZERO
 var zoom : float = 0.82 # 0.52 # 0.16 # 0.24 #0.16 # 0.34 # 0.21 # 0.6
 const MIN_ZOOM := 0.1
 const MAX_ZOOM := 5.0
+
+# SPATIAL HASHING
+var cell_size : int = 500 # 250 # 500
+var cells_per_row : int = 0
+var num_cells : int = 0
 
 # INTERACTION MATRIX
 var interaction_matrix : PackedFloat32Array = []
@@ -158,6 +164,32 @@ func rebuild_buffers(data: Dictionary):
 	buffers.append(rdmain.storage_buffer_create(species_bytes.size(), species_bytes))  # 2
 	buffers.append(rdmain.storage_buffer_create(interaction_bytes.size(), interaction_bytes))  # 5
 
+	# SPATIAL HASIHNG BUFFERS
+	# Compute Number of Cells
+	var world_size := float(image_size) * float(world_size_mult) # same as GLSL's world
+	cells_per_row = int(ceil(world_size / cell_size))
+	num_cells = cells_per_row * cells_per_row  # SETS global property: num_cells
+	# Cell counts buffer (per cell)
+	var cell_counts_b := PackedByteArray()
+	cell_counts_b.resize(num_cells * 4)
+	buffers.append(rdmain.storage_buffer_create(cell_counts_b.size(), cell_counts_b))  # binding 3
+	# Cell offsets buffer (per cell)
+	var cell_offsets_b := PackedByteArray()
+	cell_offsets_b.resize(num_cells * 4)
+	buffers.append(rdmain.storage_buffer_create(cell_offsets_b.size(), cell_offsets_b))  # binding 4
+	# Sorted indices (per agent)
+	var sorted_indices_b := PackedByteArray()
+	sorted_indices_b.resize(int(point_count) * 4)
+	buffers.append(rdmain.storage_buffer_create(sorted_indices_b.size(), sorted_indices_b))  # binding 5
+	# Agent -> cell mapping (per agent)
+	var agent_cell_b := PackedByteArray()
+	agent_cell_b.resize(int(point_count) * 4)
+	buffers.append(rdmain.storage_buffer_create(agent_cell_b.size(), agent_cell_b))  # binding 6
+	# Cursor per cell (per cell)
+	var cursor_b := PackedByteArray()
+	cursor_b.resize(num_cells * 4)
+	buffers.append(rdmain.storage_buffer_create(cursor_b.size(), cursor_b))  # binding 7
+
 	# Output texture
 	textureRD.texture_rd_rid = output_particles
 
@@ -194,13 +226,27 @@ func rebuild_buffers(data: Dictionary):
 	shader = rdmain.shader_create_from_spirv(shader_file.get_spirv())
 	pipeline = rdmain.compute_pipeline_create(shader)
 
-func compute_stage(_run_mode:int,input_set,output_set):
+func compute_stage(run_mode:int,input_set,output_set):
 	var global_size_x : int
 	var global_size_y : int
 	
-	# Dispatch group size
-	global_size_x = int(ceil(float(compute_texture_size) / float(shader_local_size_x)))
-	global_size_y = int(ceil(float(compute_texture_size) / float(shader_local_size_y)))
+	var group_size = shader_local_size_x * shader_local_size_y # 16*16 = 256
+	
+	# --- texture based passes ---
+	if run_mode in [0,10]:
+		global_size_x = int(ceil(float(compute_texture_size) / shader_local_size_x))
+		global_size_y = int(ceil(float(compute_texture_size) / shader_local_size_y))
+
+	# --- prefix scan ---
+	elif run_mode == 11:
+		global_size_x = int(ceil(float(num_cells) / float(group_size)))
+		global_size_y = 1
+
+	# --- scatter ---
+	elif run_mode == 12:
+		global_size_x = int(ceil(float(point_count) / float(group_size)))
+		global_size_y = 1
+		
 	
 	var compute_list := rdmain.compute_list_begin()
 	rdmain.compute_list_bind_compute_pipeline(compute_list, pipeline)
@@ -209,6 +255,7 @@ func compute_stage(_run_mode:int,input_set,output_set):
 
 	# PUSH CONSTANT PARAMETERS
 	var params := PackedFloat32Array([
+		run_mode,
 		dt,
 		compute_texture_size,
 		damping,
@@ -220,10 +267,13 @@ func compute_stage(_run_mode:int,input_set,output_set):
 		border_style,
 		border_size_scale,
 		image_size,
+		world_size_mult,
 		center_attraction,
 		force_softening,
 		max_force,
 		max_velocity,
+		cell_size,
+		cells_per_row,
 		0.0 # padding to 4
 	])
 	var params_bytes := PackedByteArray()
@@ -233,8 +283,7 @@ func compute_stage(_run_mode:int,input_set,output_set):
 	rdmain.compute_list_dispatch(compute_list, global_size_x, global_size_y, 1) 
 	rdmain.compute_list_end()
 
-func _physics_process(_delta):
-	# using _physics_process - Just to have a stable fps for now
+func _process(_delta):
 	RenderingServer.call_on_render_thread(run_simulation)
 
 func run_simulation():
@@ -242,7 +291,20 @@ func run_simulation():
 	var frame_flip = flip_buffers()
 	var input_set  = frame_flip[0]
 	var output_set = frame_flip[1]
+
+	# ---------- SPATIAL HASHING PASSES ----------
+	# zero cell counts # TODO confirm buffer
+	var empty_counts_bytes :PackedByteArray
+	empty_counts_bytes.resize(num_cells * 4)
+	rdmain.buffer_update(buffers[2], 0, empty_counts_bytes.size(), empty_counts_bytes)
+	# count cells (agents per cell)
+	compute_stage(10,input_set,output_set)  
+	# compute prefix sum
+	compute_stage(11,input_set,output_set)  
+	# scatter sorted indices
+	compute_stage(12,input_set,output_set)
 	
+	# ---------- SIMULATION PASSES ----------
 	# RUN SIM STEP
 	compute_stage(0,input_set,output_set)
 	
@@ -300,6 +362,31 @@ func _create_uniform_set(texture_rd: RID, texture_rd2: RID, _uniform_set: int) -
 	uniform4.binding = 2
 	uniform4.add_id(buffers[1]) # interaction_matrix
 	
-	var new_set = [uniform, uniform2, uniform3, uniform4]
+	var uniform5 := RDUniform.new()
+	uniform5.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uniform5.binding = 3
+	uniform5.add_id(buffers[2]) # Cell counts buffer
+	
+	var uniform6 := RDUniform.new()
+	uniform6.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uniform6.binding = 4
+	uniform6.add_id(buffers[3]) # Cell offsets buffer
+	
+	var uniform7 := RDUniform.new()
+	uniform7.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uniform7.binding = 5
+	uniform7.add_id(buffers[4]) # Sorted indices
+	
+	var uniform8 := RDUniform.new()
+	uniform8.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uniform8.binding = 6
+	uniform8.add_id(buffers[5]) # Agent -> cell mapping
+	
+	var uniform9 := RDUniform.new()
+	uniform9.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uniform9.binding = 7
+	uniform9.add_id(buffers[6]) # Cursor per cell
+	
+	var new_set = [uniform, uniform2, uniform3, uniform4, uniform5, uniform6, uniform7, uniform8, uniform9]
 	
 	return rdmain.uniform_set_create(new_set, shader, _uniform_set)
