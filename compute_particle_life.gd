@@ -98,16 +98,22 @@ func _ready():
 	RenderingServer.call_on_render_thread(restart_simulation)
 
 func _exit_tree():
-	if textureRD:
-		textureRD.texture_rd_rid = RID()
+	#if textureRD:
+		#textureRD.texture_rd_rid = RID()
 	RenderingServer.call_on_render_thread(_free_compute_resources)
 
 func _free_compute_resources():
+	if textureRD:
+		textureRD.texture_rd_rid = RID()
 	for i in range(buffers.size()):
 		if buffers[i]:
 			rdmain.free_rid(buffers[i])
 	if shader:
 		rdmain.free_rid(shader)
+	if input_particles:
+		rdmain.free_rid(input_particles)
+	if output_particles:
+		rdmain.free_rid(output_particles)
 	# TODO: consider other RIDs
 
 func restart_simulation():
@@ -137,6 +143,7 @@ func restart_simulation():
 	%CheckBoxLockMatrix.disabled = false 
 
 func rebuild_buffers(data: Dictionary):
+	_free_compute_resources()
 	buffers.clear()
 
 	var img_particles := Image.create(
