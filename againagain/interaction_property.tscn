@@ -1,0 +1,30 @@
+[gd_scene format=3 uid="uid://ga7nkrvmc5lx"]
+
+[ext_resource type="Script" uid="uid://kcuf53nnm1b3" path="res://againagain/interaction_property.gd" id="1_74xjn"]
+
+[node name="InteractionProperty" type="HBoxContainer" unique_id=66235976]
+script = ExtResource("1_74xjn")
+
+[node name="LineEdit" type="LineEdit" parent="." unique_id=1531246771]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Input"
+
+[node name="LineEdit2" type="LineEdit" parent="." unique_id=1688570390]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Input2"
+
+[node name="LineEdit3" type="LineEdit" parent="." unique_id=1319372750]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Output"
+
+[node name="Button" type="Button" parent="." unique_id=742169761]
+layout_mode = 2
+text = "Delete"
+
+[connection signal="text_changed" from="LineEdit" to="." method="_on_line_edit_text_changed"]
+[connection signal="text_changed" from="LineEdit2" to="." method="_on_line_edit_2_text_changed"]
+[connection signal="text_changed" from="LineEdit3" to="." method="_on_line_edit_3_text_changed"]
+[connection signal="pressed" from="Button" to="." method="_on_button_pressed"]

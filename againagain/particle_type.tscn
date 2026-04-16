@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://cqfc7n8iuy4mr"]
+
+[ext_resource type="Script" uid="uid://cm7qvu2jsrbnk" path="res://againagain/particle_type.gd" id="1_4dru4"]
+
+[node name="ParticleType" type="HBoxContainer" unique_id=50285768]
+script = ExtResource("1_4dru4")
+
+[node name="TextureRect" type="TextureRect" parent="." unique_id=1840736690]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="." unique_id=1336906458]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Fire"
+
+[node name="Button" type="Button" parent="." unique_id=1864619898]
+layout_mode = 2
+text = "Edit"
+
+[connection signal="pressed" from="Button" to="." method="_on_button_pressed"]

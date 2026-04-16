@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://vv24rswq2o50"]
+
+[ext_resource type="Script" uid="uid://c2updrb71wimk" path="res://againagain/tool_property_string.gd" id="1_t7sju"]
+
+[node name="ToolPropertyString" type="HBoxContainer" unique_id=420462415]
+script = ExtResource("1_t7sju")
+
+[node name="Label" type="Label" parent="." unique_id=2113926640]
+layout_mode = 2
+text = "Name:"
+
+[node name="LineEdit" type="LineEdit" parent="." unique_id=609483414]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[connection signal="text_changed" from="LineEdit" to="." method="_on_line_edit_text_changed"]
