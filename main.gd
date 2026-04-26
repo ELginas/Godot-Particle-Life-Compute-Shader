@@ -24,29 +24,29 @@ func _ready():
 	
 	# Options default values
 	%OptionStartInteractionRange.selected = int(%ComputeParticleLife.rand_start_interaction_range)
-	%OptionStartRadiusMultiplier.selected =  int(%ComputeParticleLife.rand_start_radius_mul)
+	%OptionStartRadiusMultiplier.selected = int(%ComputeParticleLife.rand_start_radius_mul)
 	%OptionStartSpeciesCount.selected = %ComputeParticleLife.start_species_count
 	%OptionStartPointCount.selected = 3
 
 func _process(_delta):
 	# SET READOUT VALUES
-	%LabelPointsValue.text = str(snapped(%ComputeParticleLife.point_count,1))
-	%LabelSpeciesValue.text = str(snapped(%ComputeParticleLife.species_count,1))
-	%LabelSpeedValue.text = str(snapped(%ComputeParticleLife.dt,.01))
-	%LabelDampingValue.text = str(snapped(%ComputeParticleLife.damping,.01))
-	%LabelSenseRadiusValue.text = str(snapped(%ComputeParticleLife.interaction_radius,.01))
-	%LabelForceSoftenMultiplierValue.text = str(snapped(%ComputeParticleLife.force_softening_mul,.01))
-	%LabelForceSoftenValue.text = str(snapped(%ComputeParticleLife.force_softening,.01))
-	%LabelMaxVelocityMultiplierValue.text = str(snapped(%ComputeParticleLife.max_velocity_mul,.01))
-	%LabelMaxVelocityValue.text = str(snapped(%ComputeParticleLife.max_velocity,.01))
-	%LabelCollideRadiusValue.text = str(snapped(%ComputeParticleLife.collision_radius,.1))
-	%LabelCollideStrValue.text = str(snapped(%ComputeParticleLife.collision_strength,.01))
-	%LabelBorderStyleValue.text = str(snapped(%ComputeParticleLife.border_style,.01))
-	%LabelBorderScaleValue.text = str(snapped(%ComputeParticleLife.border_size_scale,.01))
-	%LabelCenterPullValue.text = str(snapped(%ComputeParticleLife.center_attraction,.01))
-	%LabelMaxForceValue.text = str(snapped(%ComputeParticleLife.max_force,.01))
-	%LabelCamCenterValue.text = "("+str(snapped(%ComputeParticleLife.camera_center.x,.1))+ ", " + str(snapped(%ComputeParticleLife.camera_center.y,.1)) + ")"
-	%LabelZoomValue.text = str(snapped(%ComputeParticleLife.zoom,.01))
+	%LabelPointsValue.text = str(snapped(%ComputeParticleLife.point_count, 1))
+	%LabelSpeciesValue.text = str(snapped(%ComputeParticleLife.species_count, 1))
+	%LabelSpeedValue.text = str(snapped(%ComputeParticleLife.dt, .01))
+	%LabelDampingValue.text = str(snapped(%ComputeParticleLife.damping, .01))
+	%LabelSenseRadiusValue.text = str(snapped(%ComputeParticleLife.interaction_radius, .01))
+	%LabelForceSoftenMultiplierValue.text = str(snapped(%ComputeParticleLife.force_softening_mul, .01))
+	%LabelForceSoftenValue.text = str(snapped(%ComputeParticleLife.force_softening, .01))
+	%LabelMaxVelocityMultiplierValue.text = str(snapped(%ComputeParticleLife.max_velocity_mul, .01))
+	%LabelMaxVelocityValue.text = str(snapped(%ComputeParticleLife.max_velocity, .01))
+	%LabelCollideRadiusValue.text = str(snapped(%ComputeParticleLife.collision_radius, .1))
+	%LabelCollideStrValue.text = str(snapped(%ComputeParticleLife.collision_strength, .01))
+	%LabelBorderStyleValue.text = str(snapped(%ComputeParticleLife.border_style, .01))
+	%LabelBorderScaleValue.text = str(snapped(%ComputeParticleLife.border_size_scale, .01))
+	%LabelCenterPullValue.text = str(snapped(%ComputeParticleLife.center_attraction, .01))
+	%LabelMaxForceValue.text = str(snapped(%ComputeParticleLife.max_force, .01))
+	%LabelCamCenterValue.text = "(" + str(snapped(%ComputeParticleLife.camera_center.x, .1)) + ", " + str(snapped(%ComputeParticleLife.camera_center.y, .1)) + ")"
+	%LabelZoomValue.text = str(snapped(%ComputeParticleLife.zoom, .01))
 	
 	# SET INTERACTION MATRIX TEXT
 	var species_count = %ComputeParticleLife.species_count
@@ -68,11 +68,11 @@ func _process(_delta):
 
 func pause_resume():
 	if %ComputeParticleLife.dt == 0.0:
-		%ComputeParticleLife.dt = %ComputeParticleLife.paused_dt  # resume
+		%ComputeParticleLife.dt = %ComputeParticleLife.paused_dt # resume
 		%ButtonPauseResume.text = "PAUSE"
 	else:
-		%ComputeParticleLife.paused_dt = %ComputeParticleLife.dt  # store current
-		%ComputeParticleLife.dt = 0.0       # pause
+		%ComputeParticleLife.paused_dt = %ComputeParticleLife.dt # store current
+		%ComputeParticleLife.dt = 0.0 # pause
 		%ButtonPauseResume.text = "RESUME"
 
 func _on_slider_changed(value: float, property: String):
@@ -85,23 +85,23 @@ func _on_button_pause_resume_pressed() -> void:
 	pause_resume()
 
 func _on_option_start_method_item_selected(index: int) -> void:
-	%ComputeParticleLife.starting_method=index
+	%ComputeParticleLife.starting_method = index
 
 func _on_option_start_interaction_range_item_selected(index: int) -> void:
-	%ComputeParticleLife.rand_start_interaction_range=index
+	%ComputeParticleLife.rand_start_interaction_range = index
 
 func _on_option_start_radius_multiplier_item_selected(index: int) -> void:
-	%ComputeParticleLife.rand_start_radius_mul=index
+	%ComputeParticleLife.rand_start_radius_mul = index
 
 func _on_option_start_point_count_item_selected(index: int) -> void:
-	%ComputeParticleLife.start_point_count=int(%OptionStartPointCount.get_item_text(index))
+	%ComputeParticleLife.start_point_count = int(%OptionStartPointCount.get_item_text(index))
 
 func _on_option_start_species_count_item_selected(index: int) -> void:
-	%ComputeParticleLife.start_species_count=index
+	%ComputeParticleLife.start_species_count = index
 	
-	%CheckBoxLockMatrix.disabled=false
+	%CheckBoxLockMatrix.disabled = false
 	if (%ComputeParticleLife.start_species_count != %ComputeParticleLife.species_count):
-			%CheckBoxLockMatrix.disabled=true
+			%CheckBoxLockMatrix.disabled = true
 
 # HANDLE MOUSE INPUTS
 var dragging := false
@@ -121,6 +121,6 @@ func _unhandled_input(event):
 
 	elif event is InputEventMouseMotion and dragging:
 		# Convert drag delta to world space based on zoom
-		var delta :Vector2= (event.position - last_mouse_pos) / %ComputeParticleLife.zoom
+		var delta: Vector2 = (event.position - last_mouse_pos) / %ComputeParticleLife.zoom
 		last_mouse_pos = event.position
 		%ComputeParticleLife.camera_center -= delta
