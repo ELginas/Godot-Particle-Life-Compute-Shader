@@ -7,12 +7,21 @@ var pipeline_rid: RID
 
 var image: Image
 
+var state = {}
+
 func _ready():
-	rd = RenderingServer.get_rendering_device()
+	pass
+	#rd = RenderingServer.get_rendering_device()
 	# Anything interacting with RenderingDevice should run in render thread (or is it only
 	# RenderingServer?)
 	# rendering/driver/threads/thread_model="safe" so it doesn't matter in this case.
-	RenderingServer.call_on_render_thread(_rendering_main)
+	#RenderingServer.call_on_render_thread(_rendering_main)
+
+func load_state(new_state):
+	state = new_state
+	$HUD.state = state
+	$Camera2D.state = state
+	$MultiMeshInstance2D.state = state
 
 func _create_state():
 	image = Image.create_empty(64, 64, false, Image.FORMAT_RGBAF)

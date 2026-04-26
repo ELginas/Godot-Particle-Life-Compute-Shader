@@ -13,7 +13,7 @@ extends CanvasLayer
 	'push_particles': $Panel/TabContainer/Tools/VBoxContainer/PushParticlesBtn,
 }
 
-var state = {}
+@onready var state = $"..".state
 
 func _ready():
 	tools_init()
@@ -28,6 +28,7 @@ func update_all():
 	interactions_update()
 	world_update()
 	camera_update()
+	$"../Camera2D".update()
 
 func tools_init():
 	state['tool_active'] = 'add_particles'
@@ -292,16 +293,23 @@ func interactions_on_delete(i):
 
 func world_init():
 	state['world_particle_limit'] = 2500
+	state['world_tex_size'] = [64, 64]
+	$"../MultiMeshInstance2D".init()
+	world_update()
+
+func world_reset():
+	$"../MultiMeshInstance2D".init()
 	world_update()
 
 func world_update():
 	$Panel/TabContainer/World/VBoxContainer/HBoxContainer/SpinBox.value = state['world_particle_limit']
+	$"../MultiMeshInstance2D".update()
 
 func world_on_world_particle_limit_change(new_value):
-	state['world_particle_limit'] = new_value
+	state['world_particle_limit'] = new_value as int
 
 func world_on_reset_world():
-	pass
+	world_reset()
 
 func world_on_quick_save():
 	var json = JSON.stringify(state)
@@ -311,7 +319,9 @@ func world_on_quick_save():
 func world_on_quick_load():
 	var file = FileAccess.open("user://quick_save.json", FileAccess.READ)
 	var content = file.get_as_text()
-	state = JSON.parse_string(content)
+	var new_state = JSON.parse_string(content)
+	new_state['world_particle_limit'] = new_state['world_particle_limit'] as int
+	$"..".load_state(new_state)
 	update_all()
 
 func world_on_save_world_file():
@@ -321,9 +331,9 @@ func world_on_load_world_file():
 	pass
 
 func camera_init():
-	state['camera_min_zoom'] = 250
-	state['camera_max_zoom'] = 2500
-	state['camera_zoom_speed'] = 25
+	state['camera_min_zoom'] = 0.1
+	state['camera_max_zoom'] = 50
+	state['camera_zoom_speed'] = 0.1
 	camera_update()
 
 func camera_update():
