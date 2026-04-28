@@ -79,6 +79,9 @@ layout(push_constant, std430) uniform Params {
   // Uniform grid
   float cell_size;     // hashing cell size
   float cells_per_row; // hashing cells per row
+  float cursor_x;
+  float cursor_y;
+  float cursor_force;
 }
 params;
 
@@ -246,6 +249,13 @@ void run_sim() {
     vec2 dir_center = normalize(r_center);
     force += params.center_attraction * dir_center;
   }
+
+  // Cursor force
+  vec2 cursor_pos = vec2(params.cursor_x, params.cursor_y);
+  vec2 r_cursor = cursor_pos - pos;
+  // float dist_center = length(r_cursor);
+  vec2 dir_cursor = normalize(r_cursor);
+  force += params.cursor_force * dir_cursor;
 
   // Integrate velocity
   vel += force * params.dt;

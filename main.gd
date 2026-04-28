@@ -10,6 +10,7 @@ var slider_bindings = {
 	"%SliderCollideStr": "collision_strength",
 	"%SliderCenterPull": "center_attraction",
 	"%SliderMaxForce": "max_force",
+	"%SliderCursorForce": "max_cursor_force",
 	"%SliderBorderStyle": "border_style",
 	"%SliderBorderScale": "border_size_scale"
 }
@@ -45,6 +46,7 @@ func _process(_delta):
 	%LabelBorderScaleValue.text = str(snapped(%ComputeParticleLife.border_size_scale, .01))
 	%LabelCenterPullValue.text = str(snapped(%ComputeParticleLife.center_attraction, .01))
 	%LabelMaxForceValue.text = str(snapped(%ComputeParticleLife.max_force, .01))
+	%LabelCursorForceValue.text = str(snapped(%ComputeParticleLife.max_cursor_force, .01))
 	%LabelCamCenterValue.text = "(" + str(snapped(%ComputeParticleLife.camera_center.x, .1)) + ", " + str(snapped(%ComputeParticleLife.camera_center.y, .1)) + ")"
 	%LabelZoomValue.text = str(snapped(%ComputeParticleLife.zoom, .01))
 	

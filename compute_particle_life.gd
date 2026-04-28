@@ -35,6 +35,11 @@ var border_size_scale: float = 1.0 # scaled from image_size
 # CENTER FORCE (optional)
 var center_attraction: float = 0.0 # 0.1 #0.28 #0.35 # 0.01 # # set to 0 to turn off
 
+# CURSOR FORCE
+var cursor_force: float = 0.0
+var max_cursor_force: float = 200.0
+var cursor_pos: Vector2
+
 # FORCE ADJUSTMENTS
 var damping: float = 0.95 # 1.0 # 0.85 #0.99 # FRICTION
 var max_force: float = 500.0 # 13.0 # 3.0 #0.1 # 20.0 # 5.0 # 0.0 to 5.0
@@ -281,7 +286,11 @@ func compute_stage(run_mode: int, input_set, output_set):
 		max_velocity,
 		cell_size,
 		cells_per_row,
-		0.0 # padding to 4
+		cursor_pos.x,
+		cursor_pos.y,
+		cursor_force,
+		0.0,
+		0.0 # padding to 96
 	])
 	var params_bytes := PackedByteArray()
 	params_bytes.append_array(params.to_byte_array())
@@ -291,6 +300,13 @@ func compute_stage(run_mode: int, input_set, output_set):
 	rdmain.compute_list_end()
 
 func _process(_delta):
+	cursor_force = 0.0
+	if Input.is_action_pressed("force_pull"):
+		cursor_force += max_cursor_force
+	if Input.is_action_pressed("force_push"):
+		cursor_force -= max_cursor_force
+	cursor_pos = get_local_mouse_position() - size / 2
+
 	RenderingServer.call_on_render_thread(run_simulation)
 
 func run_simulation():
