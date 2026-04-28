@@ -7,6 +7,8 @@ uniform vec2 viewport_size;
 uniform float min_speed = 0.0;
 uniform float max_speed = 1.0;
 uniform int species_count = 8; // TODO: need to update from GDSCRIPT
+uniform int species_tex_row = 4;
+uniform vec2 species_tex_size = vec2(16, 16);
 uniform vec2 camera_center;
 uniform float zoom;
 varying flat int v_instance_id;
@@ -31,6 +33,14 @@ void vertex() {
 	
 	float radius = 20.0 * zoom;
 	local *= radius;
+
+	int col = v_species_id % species_tex_row;
+	int row = v_species_id / species_tex_row;
+	float x = float(col) / float(species_tex_row);
+	float y = float(row) / float(species_tex_row);
+	vec2 uv_offset = vec2(x, y);
+	UV /= float(species_tex_row);
+	UV += uv_offset;
 
 	VERTEX = view_pos + screen_center + local;
 }

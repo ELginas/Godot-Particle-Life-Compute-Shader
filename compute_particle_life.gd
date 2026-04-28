@@ -207,7 +207,7 @@ func rebuild_buffers(data: Dictionary):
 
 	# multimesh/instance/mesh/material
 	#var mask :Texture2D= load("res://triangle.png")
-	var mask: GradientTexture2D = load("res://my_circle.tres")
+	var mask = load("res://texture_atlas.png")
 	render_material.shader = load("res://particle_draw.gdshader")
 	render_material.set_shader_parameter("alpha_tex", mask)
 	render_material.set_shader_parameter("particle_buffer", textureRD)
@@ -220,7 +220,7 @@ func rebuild_buffers(data: Dictionary):
 	render_material.set_shader_parameter("viewport_size", Vector2(viewport_size, viewport_size))
 	%MMI.material = render_material # 2D
 
-	quadmesh.size = Vector2.ONE
+	quadmesh.size = Vector2.ONE * Vector2(1, -1)
 	multimesh.instance_count = 0 # can only set other values when instance_count==0
 	multimesh.mesh = quadmesh
 	multimesh.transform_format = MultiMesh.TRANSFORM_2D
